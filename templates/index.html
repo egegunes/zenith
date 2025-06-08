@@ -151,7 +151,7 @@
             const formData = new FormData();
             formData.append('address', address);
             
-            fetch('/geocode', {
+            fetch('/geocode/', {
                 method: 'POST',
                 body: formData
             })
@@ -188,7 +188,7 @@
             resultDiv.innerHTML = '<p>Calculating...</p>';
             resultDiv.className = 'info-box';
             
-            fetch('/calculate', {
+            fetch('/calculate/', {
                 method: 'POST',
                 body: formData
             })
