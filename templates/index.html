@@ -32,7 +32,7 @@
             margin-bottom: 5px;
             font-weight: bold;
         }
-        input[type="date"], input[type="number"] {
+        input[type="date"], input[type="number"], input[type="text"], select {
             width: 100%;
             padding: 10px;
             border: 1px solid #444;
@@ -84,16 +84,31 @@
 </head>
 <body>
     <div class="container">
-        <h1>🌟 Corona Borealis Zenith Calculator</h1>
+        <h1>🌟 Constellation Zenith Calculator</h1>
         
         <div class="info-box">
-            <strong>About:</strong> This calculator determines when Alphecca (α Coronae Borealis) reaches its maximum altitude for your location and date. "Zenith" refers to the highest point in the sky the star reaches.
+            <strong>About:</strong> This calculator determines when a constellation's brightest star reaches its maximum altitude for your location and date. "Zenith" refers to the highest point in the sky the star reaches.
         </div>
 
         <form id="zenithForm">
             <div class="form-group">
+                <label for="constellation">Constellation:</label>
+                <select id="constellation" name="constellation" required>
+                    <option value="corona_borealis">Corona Borealis (Alphecca)</option>
+                    <option value="camelopardalis">Camelopardalis (β Camelopardalis)</option>
+                    <option value="coma_berenices">Coma Berenices (β Comae Berenices)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
                 <label for="date">Date:</label>
                 <input type="date" id="date" name="date" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="address">Address (optional):</label>
+                <input type="text" id="address" name="address" placeholder="e.g., New York, NY or 123 Main St, City, State">
+                <button type="button" id="geocodeBtn" style="margin-top: 10px; width: auto; padding: 8px 16px;">Get Coordinates</button>
             </div>
             
             <div class="form-group">
@@ -113,6 +128,46 @@
     </div>
 
     <script>
+        document.getElementById('geocodeBtn').addEventListener('click', function() {
+            const address = document.getElementById('address').value.trim();
+            if (!address) {
+                alert('Please enter an address');
+                return;
+            }
+            
+            this.disabled = true;
+            this.textContent = 'Geocoding...';
+            
+            const formData = new FormData();
+            formData.append('address', address);
+            
+            fetch('/geocode', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('latitude').value = data.latitude.toFixed(4);
+                    document.getElementById('longitude').value = data.longitude.toFixed(4);
+                    
+                    const resultDiv = document.getElementById('result');
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `<p><strong>Found:</strong> ${data.display_name}</p>`;
+                    resultDiv.className = 'info-box success';
+                } else {
+                    alert(`Geocoding failed: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                alert(`Geocoding failed: ${error.message}`);
+            })
+            .finally(() => {
+                this.disabled = false;
+                this.textContent = 'Get Coordinates';
+            });
+        });
+
         document.getElementById('zenithForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -131,14 +186,15 @@
             .then(data => {
                 if (data.success) {
                     let html = `
-                        <h3>Results for ${formData.get('date')}</h3>
+                        <h3>Results for ${data.constellation_name} on ${formData.get('date')}</h3>
+                        <p><strong>Star:</strong> ${data.star_name}</p>
                         <p><strong>Maximum Altitude Time:</strong> ${data.zenith_time} (local time)</p>
                         <p><strong>Maximum Altitude:</strong> ${data.max_altitude}°</p>
                     `;
                     
                     if (!data.reaches_zenith) {
                         html += `<div class="info-box warning">
-                            <strong>Note:</strong> Corona Borealis doesn't reach true zenith at this latitude. 
+                            <strong>Note:</strong> ${data.constellation_name} doesn't reach true zenith at this latitude. 
                             The time shown is when it reaches its maximum altitude.
                         </div>`;
                     }

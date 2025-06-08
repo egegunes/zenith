@@ -5,18 +5,73 @@ from astropy import units as u
 from datetime import datetime, timedelta
 import pytz
 import numpy as np
+import requests
 
 app = Flask(__name__)
 
-ALPHECCA_RA = "15h34m41s"
-ALPHECCA_DEC = "+26d42m53s"
+CONSTELLATIONS = {
+    "corona_borealis": {
+        "name": "Corona Borealis",
+        "star": "Alphecca (α Coronae Borealis)",
+        "ra": "15h34m41s",
+        "dec": "+26d42m53s",
+    },
+    "camelopardalis": {
+        "name": "Camelopardalis",
+        "star": "β Camelopardalis",
+        "ra": "05h03m25s",
+        "dec": "+60d26m32s",
+    },
+    "coma_berenices": {
+        "name": "Coma Berenices",
+        "star": "β Comae Berenices",
+        "ra": "13h11m52s",
+        "dec": "+27d52m41s",
+    },
+}
 
 
-def calculate_zenith_time(date, latitude, longitude):
-    """Calculate when Alphecca reaches maximum altitude for given location and date"""
+def geocode_address(address):
+    """Convert address to latitude/longitude using OpenStreetMap Nominatim API"""
     try:
-        # Create coordinates for Alphecca
-        alphecca = SkyCoord(ra=ALPHECCA_RA, dec=ALPHECCA_DEC, frame="icrs")
+        base_url = "https://nominatim.openstreetmap.org/search"
+        params = {"q": address, "format": "json", "limit": 1, "addressdetails": 1}
+        headers = {"User-Agent": "ZenithCalculator/1.0"}
+
+        response = requests.get(base_url, params=params, headers=headers, timeout=5)
+        response.raise_for_status()
+
+        data = response.json()
+        if not data:
+            return {"success": False, "error": "Address not found"}
+
+        result = data[0]
+        return {
+            "success": True,
+            "latitude": float(result["lat"]),
+            "longitude": float(result["lon"]),
+            "display_name": result["display_name"],
+        }
+
+    except requests.RequestException as e:
+        return {"success": False, "error": "Geocoding service unavailable"}
+    except (KeyError, ValueError, IndexError) as e:
+        return {"success": False, "error": "Invalid response from geocoding service"}
+
+
+def calculate_zenith_time(
+    date, latitude, longitude, constellation_key="corona_borealis"
+):
+    """Calculate when constellation's brightest star reaches maximum altitude for given location and date"""
+    try:
+        # Get constellation data
+        if constellation_key not in CONSTELLATIONS:
+            raise ValueError(f"Unknown constellation: {constellation_key}")
+
+        constellation = CONSTELLATIONS[constellation_key]
+
+        # Create coordinates for the constellation's star
+        star = SkyCoord(ra=constellation["ra"], dec=constellation["dec"], frame="icrs")
 
         # Create observer location
         location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg)
@@ -29,11 +84,11 @@ def calculate_zenith_time(date, latitude, longitude):
 
         # Calculate altitude and azimuth
         altaz_frame = AltAz(obstime=times, location=location)
-        alphecca_altaz = alphecca.transform_to(altaz_frame)
+        star_altaz = star.transform_to(altaz_frame)
 
         # Find maximum altitude
-        max_alt_idx = np.argmax(alphecca_altaz.alt)
-        max_altitude = alphecca_altaz.alt[max_alt_idx].deg
+        max_alt_idx = np.argmax(star_altaz.alt)
+        max_altitude = star_altaz.alt[max_alt_idx].deg
         zenith_time_utc = times[max_alt_idx].datetime
 
         # Convert to local timezone (approximate based on longitude)
@@ -55,6 +110,8 @@ def calculate_zenith_time(date, latitude, longitude):
             "is_observable": bool(is_observable),
             "reaches_zenith": bool(reaches_zenith),
             "sun_altitude": round(sun_altitude, 1),
+            "constellation_name": constellation["name"],
+            "star_name": constellation["star"],
         }
 
     except Exception as e:
@@ -67,12 +124,27 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/geocode", methods=["POST"])
+def geocode():
+    try:
+        address = request.form.get("address", "").strip()
+        if not address:
+            return jsonify({"success": False, "error": "Address is required"})
+
+        result = geocode_address(address)
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"success": False, "error": "Geocoding failed"})
+
+
 @app.route("/calculate", methods=["POST"])
 def calculate():
     try:
         date = request.form["date"]
         latitude = float(request.form["latitude"])
         longitude = float(request.form["longitude"])
+        constellation = request.form.get("constellation", "corona_borealis")
 
         # Validate inputs
         if not (-90 <= latitude <= 90):
@@ -90,7 +162,7 @@ def calculate():
                 }
             )
 
-        result = calculate_zenith_time(date, latitude, longitude)
+        result = calculate_zenith_time(date, latitude, longitude, constellation)
         return jsonify(result)
 
     except ValueError as e:
