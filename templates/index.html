@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corona Borealis Zenith Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a2e;
+            color: #eee;
+        }
+        .container {
+            background-color: #16213e;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #ffd700;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="date"], input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #2a2a4e;
+            color: #eee;
+            font-size: 16px;
+        }
+        button {
+            background-color: #ffd700;
+            color: #1a1a2e;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #ffed4e;
+        }
+        #result {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background-color: #0f5132;
+            border: 1px solid #146c43;
+        }
+        .error {
+            background-color: #842029;
+            border: 1px solid #b02a37;
+        }
+        .info-box {
+            background-color: #0c4a6e;
+            border: 1px solid #0369a1;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .warning {
+            background-color: #92400e;
+            border: 1px solid #d97706;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌟 Corona Borealis Zenith Calculator</h1>
+        
+        <div class="info-box">
+            <strong>About:</strong> This calculator determines when Alphecca (α Coronae Borealis) reaches its maximum altitude for your location and date. "Zenith" refers to the highest point in the sky the star reaches.
+        </div>
+
+        <form id="zenithForm">
+            <div class="form-group">
+                <label for="date">Date:</label>
+                <input type="date" id="date" name="date" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="latitude">Latitude (degrees):</label>
+                <input type="number" id="latitude" name="latitude" step="0.0001" min="-90" max="90" placeholder="e.g., 40.7128" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="longitude">Longitude (degrees):</label>
+                <input type="number" id="longitude" name="longitude" step="0.0001" min="-180" max="180" placeholder="e.g., -74.0060" required>
+            </div>
+            
+            <button type="submit">Calculate Zenith Time</button>
+        </form>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        document.getElementById('zenithForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const resultDiv = document.getElementById('result');
+            
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '<p>Calculating...</p>';
+            resultDiv.className = 'info-box';
+            
+            fetch('/calculate', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    let html = `
+                        <h3>Results for ${formData.get('date')}</h3>
+                        <p><strong>Maximum Altitude Time:</strong> ${data.zenith_time} (local time)</p>
+                        <p><strong>Maximum Altitude:</strong> ${data.max_altitude}°</p>
+                    `;
+                    
+                    if (!data.reaches_zenith) {
+                        html += `<div class="info-box warning">
+                            <strong>Note:</strong> Corona Borealis doesn't reach true zenith at this latitude. 
+                            The time shown is when it reaches its maximum altitude.
+                        </div>`;
+                    }
+                    
+                    if (data.is_observable) {
+                        html += `<div class="info-box success">
+                            <strong>Observable:</strong> Yes! The constellation will be visible in dark skies at this time.
+                        </div>`;
+                    } else {
+                        html += `<div class="info-box warning">
+                            <strong>Observable:</strong> No - this occurs during daylight hours (Sun altitude: ${data.sun_altitude}°).
+                        </div>`;
+                    }
+                    
+                    resultDiv.innerHTML = html;
+                    resultDiv.className = 'success';
+                } else {
+                    resultDiv.innerHTML = `<p><strong>Error:</strong> ${data.error}</p>`;
+                    resultDiv.className = 'error';
+                }
+            })
+            .catch(error => {
+                resultDiv.innerHTML = `<p><strong>Error:</strong> ${error.message}</p>`;
+                resultDiv.className = 'error';
+            });
+        });
+
+        // Set default date to today
+        document.getElementById('date').valueAsDate = new Date();
+    </script>
+</body>
+</html>
